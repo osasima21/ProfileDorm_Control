@@ -1,26 +1,40 @@
 <!doctype html>
 <html>
 <head>
+  <meta http-equiv="refresh" content="30">   <!-- reload every 30 seconds -->
   <meta charset="utf-8"/>
   <title>ProfileDorm usage</title>
-  <style>body{font-family:monospace}table{border-collapse:collapse}td,th{border:1px solid #999;padding:4px 8px}</style>
-  <meta http-equiv="refresh" content="30">   <!-- reload every 30 seconds -->
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 20px; }
+    table { border-collapse: collapse; width: 100%; }
+    td, th { border: 1px solid #999; padding: 6px 10px; text-align: left; }
+    th { background: #f0f0f0; }
+    .utc { font-size: 0.85em; color: #666; }
+  </style>
 </head>
 <body>
 <h2>ProfileDorm launches</h2>
 <table id="t">
-<tr><th>time (UTC)</th><th>Windows user</th><th>machine ID</th><th>IP</th></tr>
+<tr>
+  <th>Local time</th>
+  <th>UTC (raw)</th>
+  <th>Windows user</th>
+  <th>machine ID</th>
+  <th>IP</th>
+</tr>
 </table>
 <script>
-fetch('telemetry.jsonl')
+fetch('telemetry.jsonl?v=' + Date.now())  // cache-bust
   .then(r => r.text())
-  .then(txt => txt.trim().split('\n').filter(Boolean).forEach(l=>{
-      const j=JSON.parse(l);
-      const row=document.getElementById('t').insertRow();
-      row.insertCell().textContent=j.utc;
-      row.insertCell().textContent=j.user;
-      row.insertCell().textContent=j.mid;
-      row.insertCell().textContent=j.ip;
+  .then(txt => txt.trim().split('\n').filter(Boolean).forEach(l => {
+      const j = JSON.parse(l);
+      const row = document.getElementById('t').insertRow();
+      const local = new Date(j.utc).toLocaleString();  // convert to YOUR timezone
+      row.insertCell().textContent = local;
+      row.insertCell().innerHTML = `<span class="utc">${j.utc}</span>`;
+      row.insertCell().textContent = j.user;
+      row.insertCell().textContent = j.mid;
+      row.insertCell().textContent = j.ip;
   }));
 </script>
 </body>
