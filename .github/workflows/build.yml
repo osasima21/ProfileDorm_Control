@@ -30,7 +30,7 @@ jobs:
 
       - name: Build executable
         run: |
-          pyinstaller --clean --onefile --distpath dist/${{ matrix.platform }} ProfileDorm.spec
+          pyinstaller --clean --distpath dist/${{ matrix.platform }} ProfileDorm.spec
 
       - name: Archive artifact
         uses: actions/upload-artifact@v4
