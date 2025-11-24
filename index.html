@@ -2,86 +2,21 @@
 <html>
 <head>
   <meta charset="utf-8"/>
+  <meta http-equiv="refresh" content="30"> 
   <title>ProfileDorm Usage Monitor</title>
   <style>
     body { font-family: system-ui, sans-serif; margin: 20px; background: #f5f5f5; }
     h1 { color: #333; }
-    
-    /* Search & Filter Panel */
-    .filter-panel {
-      background: white;
-      padding: 15px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .filter-row {
-      display: flex;
-      gap: 15px;
-      flex-wrap: wrap;
-      align-items: center;
-      margin-bottom: 10px;
-    }
-    .filter-group {
-      display: flex;
-      flex-direction: column;
-    }
-    .filter-group label {
-      font-size: 12px;
-      color: #666;
-      margin-bottom: 4px;
-    }
-    .filter-group input, .filter-group select {
-      padding: 8px 12px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      font-size: 14px;
-    }
-    .filter-group input:focus {
-      border-color: #22c7f0;
-      outline: none;
-    }
-    button {
-      padding: 10px 20px;
-      font-size: 14px;
-      cursor: pointer;
-      background: #22c7f0;
-      color: #000;
-      border: none;
-      border-radius: 4px;
-      height: 36px;
-      align-self: flex-end;
-    }
+    .controls { margin-bottom: 20px; }
+    button { padding: 10px 20px; font-size: 14px; cursor: pointer; background: #22c7f0; color: #000; border: none; border-radius: 4px; }
     button:hover { background: #1db5d8; }
-    button.danger { background: #f44336; }
-    button.danger:hover { background: #d32f2f; }
-    
-    /* Stats */
-    .stats {
-      font-size: 14px;
-      color: #666;
-      margin-bottom: 10px;
-    }
     
     /* Machine ID sections */
-    .machine-section {
-      margin-bottom: 30px;
-      border: 2px solid #ddd;
-      border-radius: 8px;
-      padding: 15px;
-      background: white;
-    }
-    .machine-header {
-      font-size: 18px;
-      font-weight: bold;
-      color: #22c7f0;
-      margin-bottom: 10px;
-      cursor: pointer;
-      user-select: none;
-    }
+    .machine-section { margin-bottom: 30px; border: 2px solid #ddd; border-radius: 8px; padding: 15px; background: white; }
+    .machine-header { font-size: 18px; font-weight: bold; color: #22c7f0; margin-bottom: 10px; cursor: pointer; }
     .machine-header:hover { text-decoration: underline; }
     
-    /* Table */
+    /* Table styling */
     table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
     th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
     th { background: #22c7f0; color: #000; font-weight: bold; }
@@ -95,100 +30,34 @@
     /* Collapsible sections */
     .machine-content { display: block; }
     .machine-content.collapsed { display: none; }
-    
-    /* No results */
-    .no-results {
-      text-align: center;
-      color: #999;
-      font-style: italic;
-      padding: 20px;
-    }
   </style>
 </head>
 <body>
 <h1>ProfileDorm Launch History</h1>
 
-<!-- Search & Filter Panel -->
-<div class="filter-panel">
-  <div class="filter-row">
-    <div class="filter-group">
-      <label>Filter By</label>
-      <select id="filter-by">
-        <option value="all">Search All Fields</option>
-        <option value="mid">Machine ID</option>
-        <option value="user">Username</option>
-        <option value="ip">IP Address</option>
-      </select>
-    </div>
-    <div class="filter-group">
-      <label>Search Term</label>
-      <input type="text" id="search-term" placeholder="Enter search term">
-    </div>
-    <button onclick="applyFilters()">Search</button>
-  </div>
+<div class="controls">
+  <button onclick="clearLogs()">🗑️ Clear All Logs (Local Only)</button>
+  <button onclick="toggleAllSections()">📂 Expand/Collapse All</button>
 </div>
 
 <div id="logs-container"></div>
 
 <script>
-// Load logs
+// Track first launches per machine ID
+const firstLaunchTracker = new Set();
+let allLogs = [];
+
+// Load and process logs
 fetch('telemetry.jsonl?v=' + Date.now())
   .then(r => r.text())
   .then(txt => {
     const lines = txt.trim().split('\n').filter(Boolean);
     allLogs = lines.map(l => JSON.parse(l));
-    renderLogs();
-    updateStats();
+    
+    // Group by machine ID
+    const grouped = groupByMachineId(allLogs);
+    renderGroupedLogs(grouped);
   });
-
-let allLogs = [];
-let filteredLogs = [];
-
-function applyFilters() {
-  const filterBy = document.getElementById('filter-by').value;
-  const searchTerm = document.getElementById('search-term').value.toLowerCase().trim();
-  
-  filteredLogs = allLogs.filter(log => {
-    switch (filterBy) {
-      case 'all':
-        return JSON.stringify(log).toLowerCase().includes(searchTerm);
-      case 'mid':
-        return log.mid.toLowerCase().includes(searchTerm);
-      case 'user':
-        return log.user.toLowerCase().includes(searchTerm);
-      case 'ip':
-        return log.ip.toLowerCase().includes(searchTerm);
-      default:
-        return true;
-    }
-  });
-  
-  renderLogs();
-  updateStats();
-}
-
-function renderLogs() {
-  const container = document.getElementById('logs-container');
-  
-  if (filteredLogs.length === 0) {
-    container.innerHTML = '<div class="no-results">No matching launches found.</div>';
-    return;
-  }
-  
-  // Group by machine ID
-  const grouped = groupByMachineId(filteredLogs);
-  container.innerHTML = '';
-  
-  const sortedEntries = Array.from(grouped.entries()).sort((a, b) => {
-    const aLatest = Math.max(...a[1].map(l => l._timestamp));
-    const bLatest = Math.max(...b[1].map(l => l._timestamp));
-    return bLatest - aLatest;
-  });
-  
-  sortedEntries.forEach(([mid, logs]) => {
-    renderMachineSection(mid, logs, container);
-  });
-}
 
 function groupByMachineId(logs) {
   const map = new Map();
@@ -199,21 +68,40 @@ function groupByMachineId(logs) {
   return map;
 }
 
+function renderGroupedLogs(grouped) {
+  const container = document.getElementById('logs-container');
+  container.innerHTML = '';
+  
+  // Sort machine IDs by most recent activity
+  const sortedEntries = Array.from(grouped.entries()).sort((a, b) => {
+    const aLatest = Math.max(...a[1].map(l => new Date(l.utc).getTime()));
+    const bLatest = Math.max(...b[1].map(l => new Date(l.utc).getTime()));
+    return bLatest - aLatest;
+  });
+  
+  sortedEntries.forEach(([mid, logs]) => {
+    renderMachineSection(mid, logs, container);
+  });
+}
+
 function renderMachineSection(mid, logs, container) {
   const section = document.createElement('div');
   section.className = 'machine-section';
   section.id = `section-${mid}`;
   
+  // Header with machine ID and count
   const header = document.createElement('div');
   header.className = 'machine-header';
   header.textContent = `Machine ID: ${mid} (${logs.length} launches)`;
   header.onclick = () => toggleSection(mid);
   section.appendChild(header);
   
+  // Content div
   const content = document.createElement('div');
   content.className = 'machine-content';
   content.id = `content-${mid}`;
   
+  // Table
   const table = document.createElement('table');
   const thead = document.createElement('thead');
   thead.innerHTML = `
@@ -230,16 +118,21 @@ function renderMachineSection(mid, logs, container) {
   
   const tbody = document.createElement('tbody');
   
-  // Sort by time (newest first)
+  // Sort logs by time (newest first)
   logs.sort((a, b) => new Date(b.utc) - new Date(a.utc));
   
   logs.forEach((log, index) => {
     const row = document.createElement('tr');
     
-    const isFirstLaunch = firstLaunchTracker.has(log.mid) && index === logs.length - 1;
-    if (isFirstLaunch) row.classList.add('first-launch');
+    // Check if this is the first launch for this machine
+    const isFirstLaunch = !firstLaunchTracker.has(log.mid);
+    if (isFirstLaunch) {
+      firstLaunchTracker.add(log.mid);
+      row.classList.add('first-launch');
+    }
     
     const localTime = new Date(log.utc).toLocaleString();
+    
     row.innerHTML = `
       <td>${logs.length - index}</td>
       <td>${localTime}</td>
@@ -263,13 +156,23 @@ function toggleSection(mid) {
   content.classList.toggle('collapsed');
 }
 
-function updateStats() {
-  const stats = document.getElementById('stats');
-  const uniqueMids = new Set(filteredLogs.map(l => l.mid)).size;
-  const uniqueUsers = new Set(filteredLogs.map(l => l.user)).size;
-  const uniqueIps = new Set(filteredLogs.map(l => l.ip)).size;
+function toggleAllSections() {
+  const contents = document.querySelectorAll('.machine-content');
+  const allCollapsed = Array.from(contents).every(c => c.classList.contains('collapsed'));
   
-  stats.textContent = `Showing ${filteredLogs.length} launches from ${uniqueMids} machines, ${uniqueUsers} users, ${uniqueIps} IPs`;
+  contents.forEach(content => {
+    if (allCollapsed) {
+      content.classList.remove('collapsed');
+    } else {
+      content.classList.add('collapsed');
+    }
+  });
+}
+
+function clearLogs() {
+  if (confirm('⚠️ This will clear the display only. To permanently delete from GitHub, you must edit telemetry.jsonl manually.\n\nContinue?')) {
+    document.getElementById('logs-container').innerHTML = '<p style="color: #999;">Logs cleared. Refresh page to reload.</p>';
+  }
 }
 </script>
 </body>
