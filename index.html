@@ -2,7 +2,6 @@
 <html>
 <head>
   <meta charset="utf-8"/>
-  <meta http-equiv="refresh" content="30"> 
   <title>ProfileDorm Usage Monitor</title>
   <style>
     body { font-family: system-ui, sans-serif; margin: 20px; background: #f5f5f5; }
@@ -113,121 +112,59 @@
 <div class="filter-panel">
   <div class="filter-row">
     <div class="filter-group">
-      <label>Search All Fields</label>
-      <input type="text" id="global-search" placeholder="Type to search..." oninput="applyFilters()">
+      <label>Filter By</label>
+      <select id="filter-by">
+        <option value="all">Search All Fields</option>
+        <option value="mid">Machine ID</option>
+        <option value="user">Username</option>
+        <option value="ip">IP Address</option>
+      </select>
     </div>
-    
     <div class="filter-group">
-      <label>Machine ID</label>
-      <input type="text" id="filter-mid" placeholder="Enter machine ID..." oninput="applyFilters()">
+      <label>Search Term</label>
+      <input type="text" id="search-term" placeholder="Enter search term">
     </div>
-    
-    <div class="filter-group">
-      <label>Username</label>
-      <input type="text" id="filter-user" placeholder="Enter username..." oninput="applyFilters()">
-    </div>
-    
-    <div class="filter-group">
-      <label>IP Address</label>
-      <input type="text" id="filter-ip" placeholder="Enter IP..." oninput="applyFilters()">
-    </div>
-    
-    <div class="filter-group">
-      <label>Date From</label>
-      <input type="date" id="filter-date-from" oninput="applyFilters()">
-    </div>
-    
-    <div class="filter-group">
-      <label>Date To</label>
-      <input type="date" id="filter-date-to" oninput="applyFilters()">
-    </div>
-    
-    <button onclick="clearAllFilters()">Clear Filters</button>
+    <button onclick="applyFilters()">Search</button>
   </div>
-  
-  <div class="stats" id="stats">Loading statistics...</div>
 </div>
 
 <div id="logs-container"></div>
 
 <script>
-// Data storage
-let allLogs = [];
-let filteredLogs = [];
-const firstLaunchTracker = new Set();
-
 // Load logs
 fetch('telemetry.jsonl?v=' + Date.now())
   .then(r => r.text())
   .then(txt => {
     const lines = txt.trim().split('\n').filter(Boolean);
-    allLogs = lines.map(l => {
-      const log = JSON.parse(l);
-      log._timestamp = new Date(log.utc).getTime();
-      return log;
-    });
-    filteredLogs = [...allLogs];
-    
-    // Identify first launches
-    const seenMids = new Set();
-    allLogs.forEach(log => {
-      if (!seenMids.has(log.mid)) {
-        firstLaunchTracker.add(log.mid);
-        seenMids.add(log.mid);
-      }
-    });
-    
+    allLogs = lines.map(l => JSON.parse(l));
     renderLogs();
     updateStats();
   });
 
-// Filter functions
+let allLogs = [];
+let filteredLogs = [];
+
 function applyFilters() {
-  const globalTerm = document.getElementById('global-search').value.toLowerCase().trim();
-  const midTerm = document.getElementById('filter-mid').value.toLowerCase().trim();
-  const userTerm = document.getElementById('filter-user').value.toLowerCase().trim();
-  const ipTerm = document.getElementById('filter-ip').value.toLowerCase().trim();
-  const dateFrom = document.getElementById('filter-date-from').value;
-  const dateTo = document.getElementById('filter-date-to').value;
+  const filterBy = document.getElementById('filter-by').value;
+  const searchTerm = document.getElementById('search-term').value.toLowerCase().trim();
   
   filteredLogs = allLogs.filter(log => {
-    const dateStr = new Date(log.utc).toISOString().split('T')[0];
-    
-    return (!globalTerm || 
-            log.mid.includes(globalTerm) || 
-            log.user.toLowerCase().includes(globalTerm) || 
-            log.hostname.toLowerCase().includes(globalTerm) || 
-            log.ip.includes(globalTerm)) &&
-           (!midTerm || log.mid.toLowerCase().includes(midTerm)) &&
-           (!userTerm || log.user.toLowerCase().includes(userTerm)) &&
-           (!ipTerm || log.ip.includes(ipTerm)) &&
-           (!dateFrom || dateStr >= dateFrom) &&
-           (!dateTo || dateStr <= dateTo);
+    switch (filterBy) {
+      case 'all':
+        return JSON.stringify(log).toLowerCase().includes(searchTerm);
+      case 'mid':
+        return log.mid.toLowerCase().includes(searchTerm);
+      case 'user':
+        return log.user.toLowerCase().includes(searchTerm);
+      case 'ip':
+        return log.ip.toLowerCase().includes(searchTerm);
+      default:
+        return true;
+    }
   });
   
   renderLogs();
   updateStats();
-}
-
-function clearAllFilters() {
-  document.getElementById('global-search').value = '';
-  document.getElementById('filter-mid').value = '';
-  document.getElementById('filter-user').value = '';
-  document.getElementById('filter-ip').value = '';
-  document.getElementById('filter-date-from').value = '';
-  document.getElementById('filter-date-to').value = '';
-  filteredLogs = [...allLogs];
-  renderLogs();
-  updateStats();
-}
-
-function updateStats() {
-  const stats = document.getElementById('stats');
-  const uniqueMids = new Set(filteredLogs.map(l => l.mid)).size;
-  const uniqueUsers = new Set(filteredLogs.map(l => l.user)).size;
-  const uniqueIps = new Set(filteredLogs.map(l => l.ip)).size;
-  
-  stats.textContent = `Showing ${filteredLogs.length} launches from ${uniqueMids} machines, ${uniqueUsers} users, ${uniqueIps} IPs`;
 }
 
 function renderLogs() {
@@ -294,10 +231,11 @@ function renderMachineSection(mid, logs, container) {
   const tbody = document.createElement('tbody');
   
   // Sort by time (newest first)
-  logs.sort((a, b) => b._timestamp - a._timestamp);
+  logs.sort((a, b) => new Date(b.utc) - new Date(a.utc));
   
   logs.forEach((log, index) => {
     const row = document.createElement('tr');
+    
     const isFirstLaunch = firstLaunchTracker.has(log.mid) && index === logs.length - 1;
     if (isFirstLaunch) row.classList.add('first-launch');
     
@@ -325,24 +263,13 @@ function toggleSection(mid) {
   content.classList.toggle('collapsed');
 }
 
-function toggleAllSections() {
-  const contents = document.querySelectorAll('.machine-content');
-  const allCollapsed = Array.from(contents).every(c => c.classList.contains('collapsed'));
+function updateStats() {
+  const stats = document.getElementById('stats');
+  const uniqueMids = new Set(filteredLogs.map(l => l.mid)).size;
+  const uniqueUsers = new Set(filteredLogs.map(l => l.user)).size;
+  const uniqueIps = new Set(filteredLogs.map(l => l.ip)).size;
   
-  contents.forEach(content => {
-    if (allCollapsed) {
-      content.classList.remove('collapsed');
-    } else {
-      content.classList.add('collapsed');
-    }
-  });
-}
-
-function clearLogs() {
-  if (confirm('⚠️ This clears the display only. To delete from GitHub, edit telemetry.jsonl manually.\n\nContinue?')) {
-    document.getElementById('logs-container').innerHTML = '<div class="no-results">Logs cleared. Refresh page to reload.</div>';
-    document.getElementById('stats').textContent = 'Showing 0 launches';
-  }
+  stats.textContent = `Showing ${filteredLogs.length} launches from ${uniqueMids} machines, ${uniqueUsers} users, ${uniqueIps} IPs`;
 }
 </script>
 </body>
